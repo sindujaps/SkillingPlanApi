@@ -1,0 +1,23 @@
+#See https://aka.ms/customizecontainer to learn how to customize your debug container and how Visual Studio uses this Dockerfile to build your images for faster debugging.
+
+FROM mcr.microsoft.com/dotnet/aspnet:7.0 AS base
+WORKDIR /app
+EXPOSE 5000
+
+ENV CORS__AllowedOrigins=$CORS__AllowedOrigins
+
+FROM mcr.microsoft.com/dotnet/sdk:7.0 AS build
+WORKDIR /src
+COPY ["src/SkillingPlanApi.Application/SkillingPlanApi.Application.csproj", "SkillingPlanApi.Application/"]
+RUN dotnet restore "SkillingPlanApi.Application/SkillingPlanApi.Application.csproj"
+COPY . .
+WORKDIR "src/SkillingPlanApi.Application"
+RUN dotnet build "SkillingPlanApi.Application.csproj" -c Release -o /app/build
+
+FROM build AS publish
+RUN dotnet publish "SkillingPlanApi.Application.csproj" -c Release -o /app/publish /p:UseAppHost=false
+
+FROM base AS final
+WORKDIR /app
+COPY --from=publish /app/publish .
+ENTRYPOINT ["dotnet", "SkillingPlanApi.Application.dll"]

@@ -1,0 +1,14 @@
+resources:
+- repo: self
+
+# Trigger builds on commits to branches
+trigger: none
+
+# Do not trigger builds on PRs
+pr: none
+
+extends:
+  template: azure-pipelines-validate-template.yml
+  parameters:
+    dockerfilePath: '$(Build.SourcesDirectory)/Dockerfile'
+    vmImageName: 'ubuntu-latest'

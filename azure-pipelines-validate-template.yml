@@ -1,0 +1,67 @@
+# Docker
+# Build and push an image to Azure Container Registry
+# https://docs.microsoft.com/azure/devops/pipelines/languages/docker
+parameters:
+- name: vmImageName
+  type: string
+  default: 'ubuntu-latest'
+- name: dockerfilePath
+  type: string
+  default: '$(Build.SourcesDirectory)/Dockerfile'
+
+stages:
+- stage: Test
+  displayName: Test build stage
+  jobs:
+  - job: Test
+    displayName: 'Run Unit Tests'
+    pool:
+      vmImage: ${{parameters.vmImageName}}
+    steps:
+    - task: UseDotNet@2
+      displayName: "Use .NET Core SDK"
+      inputs:
+        version: "7.0.304"
+    - task: DotNetCoreCLI@2
+      displayName: "Run Tests"
+      inputs:
+        command: test
+        projects: '**/*UnitTests.csproj'
+        arguments: '--logger trx /p:CollectCoverage=true /p:threshold=98 /p:thresholdType=line /p:thresholdStat=total /p:CoverletOutputFormat=cobertura --collect:"XPlat Code Coverage" /p:CoverletOutput="./TestResults/" --filter Category!=Integration'
+    - task: DotNetCoreCLI@2
+      displayName: Install ReportGenerator Global Tool
+      inputs:
+        command: custom
+        custom: tool
+        arguments: install dotnet-reportgenerator-globaltool --tool-path $(Agent.ToolsDirectory)/reportgenerator --version 4.6.1
+    - script: |
+        echo "##vso[task.prependpath]$(Agent.ToolsDirectory)/reportgenerator"
+      displayName: Update PATH
+    - script: |
+        reportgenerator "-reports:$(Agent.TempDirectory)/*/coverage.cobertura.xml" "-targetdir:$(Build.SourcesDirectory)/coverlet/reports" "-reporttypes:HTMLInline;HTMLChart"
+      displayName: Generate code coverage report
+      continueOnError: true
+    - task: PublishTestResults@2
+      displayName: "Publishing Test Results"
+      inputs:
+        testRunner: VSTest
+        testResultsFiles: '$(Agent.TempDirectory)/**/*.trx'
+    - task: PublishCodeCoverageResults@1
+      displayName: "Publishing Coverage Results"
+      inputs:
+        summaryFileLocation: $(Agent.TempDirectory)/**/coverage.cobertura.xml
+        codecoverageTool: cobertura
+
+- stage: Build
+  displayName: Build
+  jobs:
+  - job: Build
+    displayName: Build
+    pool:
+      vmImage: ${{parameters.vmImageName}}
+    steps:
+    - task: Docker@2
+      displayName: Build a docker image
+      inputs:
+        command: build
+        dockerfile: ${{parameters.dockerfilePath}}
